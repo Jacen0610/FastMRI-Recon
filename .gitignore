@@ -1,0 +1,13 @@
+# 忽略所有checkpoints目录下全部内容
+**/checkpoints/**
+
+# 忽略所有data目录下全部内容
+**/data/**
+
+# 可选补充（医学AI项目常用，按需启用）
+# **/results/**
+# *.zip
+# *.tar
+# *.h5
+# *.nii.gz
+# *.dcm
