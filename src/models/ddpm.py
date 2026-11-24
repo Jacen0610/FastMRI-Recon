@@ -102,12 +102,15 @@ class DDPM(nn.Module):
     @torch.no_grad()
     def predict_x0(self, xt, t):
         eps = self.net(xt, torch.full((xt.shape[0],), t, device=xt.device, dtype=torch.long))
-        return (xt - self.sqrt_1mab[t] * eps) / self.sqrt_ab[t].clamp(min=1e-4), eps
+        x0 = (xt - self.sqrt_1mab[t] * eps) / self.sqrt_ab[t].clamp(min=0.01)
+        return x0.clamp(-5, 5), eps   # 值域保护: 数据std≈1, 5σ封顶
 
     @torch.no_grad()
     def ddim_sample(self, n, device, size=(1, 384, 384), steps=50, callback=None):
         """DDIM 确定性采样(eta=0)。callback(x0_pred, t) 可插入数据一致性引导。"""
-        ts = torch.linspace(self.T - 1, 0, steps).long().tolist()
+        # 从t=950起步(而非T-1=999): 余弦调度尾端sqrt_ab→0, x0预测除法数值爆炸
+        t_start = min(950, self.T - 2)
+        ts = torch.linspace(t_start, 0, steps).long().tolist()
         x = torch.randn(n, *size, device=device)
         for i, t in enumerate(ts):
             t_prev = ts[i + 1] if i + 1 < len(ts) else 0

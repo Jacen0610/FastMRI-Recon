@@ -88,7 +88,8 @@ def center_crop_t(x, s=384):
 def guided_sample(ddpm, sampler, steps=50):
     """DDIM 主循环(callback直接操作张量)。"""
     device = sampler.device
-    ts = torch.linspace(ddpm.T - 1, 0, steps).long().tolist()
+    t_start = min(950, ddpm.T - 2)
+    ts = torch.linspace(t_start, 0, steps).long().tolist()
     x = torch.randn(1, 1, 384, 384, device=device)
     for i, t in enumerate(ts):
         t_prev = ts[i + 1] if i + 1 < len(ts) else 0
