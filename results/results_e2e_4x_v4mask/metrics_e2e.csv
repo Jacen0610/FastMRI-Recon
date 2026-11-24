@@ -1,0 +1,2 @@
+acceleration,rss_psnr,rss_ssim,sme_psnr,sme_ssim,varnet_psnr,varnet_ssim,rss_psnr_masked,rss_ssim_masked,sme_psnr_masked,sme_ssim_masked,varnet_psnr_masked,varnet_ssim_masked,rss_psnr_roi,rss_ssim_roi,sme_psnr_roi,sme_ssim_roi,varnet_psnr_roi,varnet_ssim_roi,rss_lpips,varnet_lpips,sme_lpips
+4,26.3312,0.7225,32.0272,0.8901,30.0619,0.8031,22.7060,0.7073,27.5745,0.8401,26.4055,0.8209,20.7159,0.6939,26.0387,0.8827,25.1241,0.8808,0.2180,0.0807,0.0530

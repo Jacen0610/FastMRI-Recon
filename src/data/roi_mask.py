@@ -38,6 +38,58 @@ def compute_local_variance(image, window_size=7):
     return local_var
 
 
+
+def estimate_noise_floor(gt, patch=40):
+    """
+    用图像四角小块估计背景噪声底(RSS合并后非中心卡方分布的均值, 不趋近0)。
+    四角位于颅骨外, 只有空气+接收机噪声, 是最稳定可测的"纯噪声"参考区。
+    取四个角均值的中位数: 个别角被解剖结构(如低位切片的颈部)污染时仍然稳健。
+    """
+    h, w = gt.shape
+    p_ = min(patch, h // 4, w // 4)
+    corner_means = [gt[:p_, :p_].mean(), gt[:p_, -p_:].mean(),
+                    gt[-p_:, :p_].mean(), gt[-p_:, -p_:].mean()]
+    return float(np.median(corner_means))
+
+
+def compute_background_mask(gt, noise_multiplier=2.0, min_ratio=0.02):
+    """
+    前景(脑组织)遮罩 v3: 噪底锚定阈值 + 填洞 + 开运算 + 最大连通域。
+
+    历史失败模式记录(两次迭代教训, 270切片全量审计):
+    - v1 固定5%*max: 体积边缘切片几乎没有亮组织, max本身小, 阈值低于噪声底,
+      全图泄漏(44/270切片覆盖>60%, 部分达100%)
+    - v2 Otsu自适应: 暗组织与背景噪声在直方图上同属低亮度类, 阈值被推入
+      组织区间(实测case2阈值达25%*max), 52%切片错杀真实脑组织
+    - v3 噪底锚定: 阈值 = max(2*噪底, 2%*max), 永远卡在"肯定高于噪声、
+      尽量低于组织"的区间。贯彻评估遮罩"宁滥勿缺"原则: 多包一点近零背景
+      无害, 漏掉脑组织才会让评估静默失效
+    """
+    threshold = max(noise_multiplier * estimate_noise_floor(gt), min_ratio * gt.max())
+    mask = gt > threshold
+    if mask.sum() < 0.001 * mask.size:
+        # 阈值以上像素不足全图0.1%(纯噪声层等退化切片): 统计上无意义,
+        # 退回全图遮罩——对没有解剖结构可隔离的切片, 全图就是诚实的口径,
+        # 同时保证下游 masked 指标永远有效(历史bug: 空遮罩曾使nan/inf污染全均值)
+        return np.ones(gt.shape, dtype=bool)
+    if not mask.any():
+        # 极端退化(纯噪声层等): 阈值以上一个像素都没有, 退回全图遮罩,
+        # 保证下游 masked 指标永不为空(对无解剖结构的切片, 全图=诚实的口径)
+        return np.ones(gt.shape, dtype=bool)
+    mask = ndimage.binary_fill_holes(mask)
+    prev = mask
+    mask = ndimage.binary_opening(mask, structure=np.ones((3, 3)))
+    if not mask.any():
+        mask = prev
+    labeled, num_features = ndimage.label(mask)
+    if num_features > 1:
+        sizes = ndimage.sum(mask, labeled, range(1, num_features + 1))
+        largest_label = np.argmax(sizes) + 1
+        mask = (labeled == largest_label)
+        if not mask.any():
+            mask = prev
+    return mask
+
 def compute_roi_mask(gt, background_mask=None, window_size=7, top_fraction=0.5):
     """
     自动生成ROI遮罩：在(可选的)背景遮罩基础上，进一步筛选出纹理最丰富的
@@ -56,25 +108,7 @@ def compute_roi_mask(gt, background_mask=None, window_size=7, top_fraction=0.5):
                   评估的区域)
     """
     if background_mask is None:
-        try:
-            from skimage.filters import threshold_otsu
-            try:
-                threshold = threshold_otsu(gt)
-            except ValueError:
-                threshold = 0.05 * gt.max()
-        except ImportError:
-            threshold = 0.05 * gt.max()
-
-        background_mask = gt > threshold
-        background_mask = ndimage.binary_fill_holes(background_mask)
-        background_mask = ndimage.binary_opening(background_mask, structure=np.ones((3, 3)))
-
-        # 只保留面积最大的连通域，排除散落的背景噪声孤岛(与Otsu阈值配合，双重保险)
-        labeled, num_features = ndimage.label(background_mask)
-        if num_features > 1:
-            sizes = ndimage.sum(background_mask, labeled, range(1, num_features + 1))
-            largest_label = np.argmax(sizes) + 1
-            background_mask = (labeled == largest_label)
+        background_mask = compute_background_mask(gt)
 
     local_var = compute_local_variance(gt, window_size=window_size)
 
@@ -88,9 +122,10 @@ def compute_roi_mask(gt, background_mask=None, window_size=7, top_fraction=0.5):
     roi_mask = background_mask & (local_var >= var_threshold)
 
     # 用形态学开运算清理孤立的噪点像素，让ROI边界更平滑连贯
-    roi_mask = ndimage.binary_opening(roi_mask, structure=np.ones((2, 2)))
-
-    return roi_mask
+    # 空集保护: 近全黑的退化切片上, 开运算可能把稀疏ROI清空(曾在full_test上
+    # 造成nan污染均值), 此时退回开运算前的mask
+    roi_cleaned = ndimage.binary_opening(roi_mask, structure=np.ones((2, 2)))
+    return roi_cleaned if roi_cleaned.any() else roi_mask
 
 
 if __name__ == "__main__":

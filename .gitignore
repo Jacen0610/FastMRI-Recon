@@ -1,13 +1,9 @@
-# 忽略所有checkpoints目录下全部内容
+# checkpoints体积大且可由训练重现
 **/checkpoints/**
 
-# 忽略所有data目录下全部内容
-**/data/**
+# Python缓存
+__pycache__/
+*.pyc
 
-# 可选补充（医学AI项目常用，按需启用）
-# **/results/**
-# *.zip
-# *.tar
-# *.h5
-# *.nii.gz
-# *.dcm
+# 注意: 不要写 **/data/** 之类规则, 会误伤 src/data/ 源码包
+# (MRI原始数据在仓库外的 ../mri_data, 无需忽略规则)

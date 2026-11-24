@@ -101,6 +101,7 @@ def parse_args():
     parser.add_argument("--no_amp", dest="amp", action="store_false")
     parser.add_argument("--num_workers", type=int, default=4)
     parser.add_argument("--checkpoint_dir", type=str, default="checkpoints/sme_unet")
+    parser.add_argument("--resume", action="store_true", help="从last.pth断点续训")
     parser.add_argument("--log_interval", type=int, default=20)
     return parser.parse_args()
 
@@ -209,8 +210,17 @@ def main():
           f"amp={args.amp and device.type == 'cuda'}\n")
 
     best_val_loss = float("inf")
+    start_epoch = 1
+    last_path = os.path.join(args.checkpoint_dir, "last.pth")
+    if args.resume and os.path.exists(last_path):
+        ck = torch.load(last_path, map_location=device, weights_only=False)
+        model.load_state_dict(ck["model_state_dict"])
+        optimizer.load_state_dict(ck["optimizer_state_dict"])
+        start_epoch = ck["epoch"] + 1
+        best_val_loss = ck.get("val_loss", float("inf"))
+        print(f"断点续训: 从 epoch {start_epoch} 开始 (best_val={best_val_loss:.6f})")
 
-    for epoch in range(1, args.epochs + 1):
+    for epoch in range(start_epoch, args.epochs + 1):
         epoch_start = time.time()
         model.train()
         running_loss = 0.0

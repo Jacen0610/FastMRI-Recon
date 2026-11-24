@@ -30,7 +30,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from data.mask import get_mask_for_acceleration, ACCELERATION_CONFIGS
 from data.transforms import center_crop, ifft2c
 from data.coil_compression import compress_coils
-from data.roi_mask import compute_roi_mask
+from data.roi_mask import compute_roi_mask, compute_background_mask
 from models.sme_unet_model import SMEUNetModel
 from models.e2e_varnet import E2EVarNet
 
@@ -48,41 +48,6 @@ def optimal_scale_align(pred, gt):
     scale = np.dot(pred_flat, gt_flat) / denom if denom > 0 else 1.0
     return pred * scale
 
-
-def compute_background_mask(gt, threshold_ratio=0.05):
-    """
-    基于GT强度生成前景/背景遮罩。
-
-    改用Otsu自适应阈值(而非固定的threshold_ratio比例)：多线圈RSS合并后，
-    背景区域的噪声底噪并非趋近于0，而是服从非中心卡方分布，有一个不可忽略
-    的均值(多个线圈噪声各自独立、平方和开根号后，不会互相抵消到0)。固定的
-    "5%最大值"阈值在背景噪声底噪较高时会失效(背景大范围被误判为前景)，Otsu
-    方法能根据每张图像素值的实际分布，自动找出前景/背景的最优分割点，更加
-    鲁棒。threshold_ratio参数保留作为Otsu方法不可用时的备用方案。
-    """
-    try:
-        from skimage.filters import threshold_otsu
-        try:
-            threshold = threshold_otsu(gt)
-        except ValueError:
-            # 极端情况(如全图数值完全相同)，Otsu无法计算，退回固定比例阈值
-            threshold = threshold_ratio * gt.max()
-    except ImportError:
-        threshold = threshold_ratio * gt.max()
-
-    mask = gt > threshold
-    try:
-        from scipy import ndimage
-        mask = ndimage.binary_fill_holes(mask)
-        mask = ndimage.binary_opening(mask, structure=np.ones((3, 3)))
-        labeled, num_features = ndimage.label(mask)
-        if num_features > 1:
-            sizes = ndimage.sum(mask, labeled, range(1, num_features + 1))
-            largest_label = np.argmax(sizes) + 1
-            mask = (labeled == largest_label)
-    except ImportError:
-        pass
-    return mask
 
 
 def compute_metrics(pred, gt, mask=None):

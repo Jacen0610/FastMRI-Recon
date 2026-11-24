@@ -30,6 +30,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from data.mask import get_mask_for_acceleration, ACCELERATION_CONFIGS
 from data.transforms import center_crop, ifft2c
 from data.coil_compression import compress_coils
+from data.roi_mask import compute_background_mask
 from models.sme_unet_model import SMEUNetModel
 from models.e2e_varnet import E2EVarNet
 from models.iterative_sme_unet import IterativeSMEUNetModel
@@ -42,17 +43,6 @@ def optimal_scale_align(pred, gt):
     scale = np.dot(pred_flat, gt_flat) / denom if denom > 0 else 1.0
     return pred * scale
 
-
-def compute_background_mask(gt, threshold_ratio=0.05):
-    threshold = threshold_ratio * gt.max()
-    mask = gt > threshold
-    try:
-        from scipy import ndimage
-        mask = ndimage.binary_fill_holes(mask)
-        mask = ndimage.binary_opening(mask, structure=np.ones((3, 3)))
-    except ImportError:
-        pass
-    return mask
 
 
 def compute_metrics(pred, gt, mask=None):

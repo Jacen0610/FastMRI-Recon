@@ -28,7 +28,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from data.mask import get_mask_for_acceleration, ACCELERATION_CONFIGS
 from data.transforms import center_crop, ifft2c
 from data.coil_compression import compress_coils
-from data.roi_mask import compute_roi_mask
+from data.roi_mask import compute_roi_mask, compute_background_mask
 from models.sme_unet_model import SMEUNetModel
 
 try:
@@ -46,35 +46,6 @@ def optimal_scale_align(pred, gt):
     scale = np.dot(pred_flat, gt_flat) / denom if denom > 0 else 1.0
     return pred * scale
 
-
-def compute_background_mask(gt, threshold_ratio=0.05):
-    """
-    基于GT强度生成前景/背景遮罩，与singlecoil项目中的方法保持一致。
-
-    补充说明：真实MRI背景并非绝对纯黑，会存在噪声底噪，个别像素可能偶然
-    超过强度阈值被误判为"前景"。这类孤立噪声点在计算局部方差(compute_roi_mask)
-    时会产生异常大的数值(孤岛式跳变比脑组织内部渐进的纹理变化方差更大)，
-    导致ROI遮罩被这些噪声点主导，而不是真正的脑组织细节区域。
-    这里额外加入"只保留最大连通域"的清理步骤：脑组织本身是一整块连续相连
-    的区域，而背景噪声点是分散、互不相连的孤立小点，用连通域分析可以
-    精确地把这些噪声孤岛排除掉，只保留真正的解剖结构主体。
-    """
-    threshold = threshold_ratio * gt.max()
-    mask = gt > threshold
-    try:
-        from scipy import ndimage
-        mask = ndimage.binary_fill_holes(mask)
-        mask = ndimage.binary_opening(mask, structure=np.ones((3, 3)))
-
-        # 只保留面积最大的连通域，排除散落的背景噪声孤岛
-        labeled, num_features = ndimage.label(mask)
-        if num_features > 1:
-            sizes = ndimage.sum(mask, labeled, range(1, num_features + 1))
-            largest_label = np.argmax(sizes) + 1
-            mask = (labeled == largest_label)
-    except ImportError:
-        pass
-    return mask
 
 
 def compute_metrics(pred, gt, mask=None):

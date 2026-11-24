@@ -66,40 +66,14 @@ def compute_roi_weight_torch(target, kernel_size=7, top_fraction=0.5, bg_thresho
     返回:
         roi_weight: (B, 1, H, W) tensor，0/1权重图(detach，不参与梯度)
     """
-    from scipy import ndimage as scipy_ndimage
-    try:
-        from skimage.filters import threshold_otsu
-        otsu_available = True
-    except ImportError:
-        otsu_available = False
+    # 背景遮罩统一使用 data.roi_mask.compute_background_mask 的 v3 实现
+    # (噪底锚定阈值, 评估与训练共用同一套逻辑; 历史失败模式见该函数docstring)
+    from data.roi_mask import compute_background_mask
 
     b = target.shape[0]
     with torch.no_grad():
         target_np = target[:, 0].cpu().numpy()  # (B, H, W)
-        target_flat = target.reshape(b, -1)
-        max_val_np = target_flat.max(dim=1)[0].cpu().numpy()
-
-        cleaned_bg_masks = []
-        for i in range(b):
-            gt_i = target_np[i]
-            if otsu_available:
-                try:
-                    threshold = threshold_otsu(gt_i)
-                except ValueError:
-                    threshold = bg_threshold_ratio * max_val_np[i]
-            else:
-                threshold = bg_threshold_ratio * max_val_np[i]
-
-            m = gt_i > threshold
-            m = scipy_ndimage.binary_fill_holes(m)
-            m = scipy_ndimage.binary_opening(m, structure=np.ones((3, 3)))
-            labeled, num_features = scipy_ndimage.label(m)
-            if num_features > 1:
-                sizes = scipy_ndimage.sum(m, labeled, range(1, num_features + 1))
-                largest_label = np.argmax(sizes) + 1
-                m = (labeled == largest_label)
-            cleaned_bg_masks.append(m)
-
+        cleaned_bg_masks = [compute_background_mask(target_np[i]) for i in range(b)]
         bg_mask_cleaned = torch.from_numpy(np.stack(cleaned_bg_masks)).to(target.device)
         bg_mask = bg_mask_cleaned.unsqueeze(1)  # (B, 1, H, W)
 
