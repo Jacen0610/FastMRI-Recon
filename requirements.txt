@@ -1,10 +1,15 @@
-# FastMRI-Recon 完整环境(本机 monai 环境实测版本, pip list 输出)
-# 注: 仅做 DDPM 训练的话, 只需 torch+numpy
-torch==2.13.0
-numpy==2.2.6
-h5py==3.16.0
-scipy==1.15.3
-scikit-image==0.25.2
-pytorch-msssim==1.0.0
-lpips==0.1.4
-matplotlib==3.10.9
+# FastMRI-Recon 环境依赖
+#
+# torch 版本按驱动选择(关键!):
+#   驱动支持 CUDA >= 12.6: torch>=2.6 任选新版(本机开发环境为 2.13.0)
+#   驱动仅支持 CUDA 12.4:  pip install "torch==2.6.0" --index-url https://download.pytorch.org/whl/cu124
+#   查看: nvidia-smi 右上角 CUDA Version
+# 代码本体(torch>=1.13 即可运行, 包括DDPM训练)
+torch>=2.0
+numpy>=1.24
+h5py>=3.8
+scipy>=1.10
+scikit-image>=0.22
+pytorch-msssim>=1.0
+lpips>=0.1.4
+matplotlib>=3.7
