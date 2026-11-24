@@ -1,10 +1,10 @@
-# FastMRI-Recon 完整环境(本机 monai 环境实测版本)
+# FastMRI-Recon 完整环境(本机 monai 环境实测版本, pip list 输出)
 # 注: 仅做 DDPM 训练的话, 只需 torch+numpy
-torch==2.6.0
-numpy==1.26.4
-h5py==3.11.0
-scipy==1.13.1
-scikit-image==0.24.0
+torch==2.13.0
+numpy==2.2.6
+h5py==3.16.0
+scipy==1.15.3
+scikit-image==0.25.2
 pytorch-msssim==1.0.0
 lpips==0.1.4
-matplotlib==3.9.2
+matplotlib==3.10.9
